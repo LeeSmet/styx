@@ -34,13 +34,13 @@ struct FrameHeader {
     len: u16,
 }
 
-/// A decoder for control frames.
-pub struct ControlDecoder {
+/// A [`Codec`](tokio_util::codec) for control frames.
+pub struct ControlCodec {
     /// Save a header after we decode one, even if we didn't receive the remainder of the data yet.
     header: Option<FrameHeader>,
 }
 
-impl Decoder for ControlDecoder {
+impl Decoder for ControlCodec {
     type Item = ControlFrame;
     type Error = std::io::Error;
 
@@ -130,10 +130,7 @@ impl Decoder for ControlDecoder {
     }
 }
 
-/// An encoder for control frames.
-pub struct ControlEncoder {}
-
-impl Encoder<ControlFrame> for ControlEncoder {
+impl Encoder<ControlFrame> for ControlCodec {
     type Error = std::io::Error;
 
     fn encode(&mut self, item: ControlFrame, dst: &mut BytesMut) -> Result<(), Self::Error> {
