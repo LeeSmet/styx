@@ -1,10 +1,15 @@
 use etherparse::{ether_type, EtherType};
-use std::{error::Error, sync::Arc};
+use std::{
+    error::Error,
+    sync::{atomic::AtomicUsize, Arc},
+};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{TcpListener, TcpStream},
 };
 use tokio_tun::TunBuilder;
+
+mod control;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
