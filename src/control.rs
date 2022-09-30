@@ -1,4 +1,4 @@
-use bytes::{Buf, BytesMut};
+use bytes::{Buf, BufMut, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 
 /// Size of the header sent on the wire before every frame.
@@ -34,6 +34,7 @@ struct FrameHeader {
     len: u16,
 }
 
+/// A decoder for control frames.
 pub struct ControlDecoder {
     /// Save a header after we decode one, even if we didn't receive the remainder of the data yet.
     header: Option<FrameHeader>,
@@ -60,11 +61,9 @@ impl Decoder for ControlDecoder {
             }
 
             // We have sufficient data, decode it.
-            // SAFETY: unwraps here are safe as we slice the buffer to the exact size, and we know
-            // there is sufficient data available by virtue of the previous check.
-            let version = u8::from_be_bytes(src[0..1].try_into().unwrap());
-            let _type = u8::from_be_bytes(src[1..2].try_into().unwrap());
-            let len = u16::from_be_bytes(src[2..4].try_into().unwrap());
+            let version = src.get_u8();
+            let _type = src.get_u8();
+            let len = src.get_u16();
 
             // Remove decoded bytes from the buffer.
             src.advance(HEADER_WIRE_SIZE);
@@ -108,9 +107,8 @@ impl Decoder for ControlDecoder {
                     ))
                 } else {
                     // SAFETY: we checked that we have sufficient data (buffer is at least header.len
-                    // bytes large, and header.len is at least 4 bytes to decode the ID). Unwrap is
-                    // safe as we convert slice with known size.
-                    let id = u32::from_be_bytes(src[..4].try_into().unwrap());
+                    // bytes large, and header.len is at least 4 bytes to decode the ID).
+                    let id = src.get_u32();
                     // Remove bytes from the buffer. As explained we remove the amount of bytes as
                     // indicated in the header, not just the bytes for the ID.
                     src.advance(header.len as usize);
@@ -129,5 +127,39 @@ impl Decoder for ControlDecoder {
                 ))
             }
         }
+    }
+}
+
+/// An encoder for control frames.
+pub struct ControlEncoder {}
+
+impl Encoder<ControlFrame> for ControlEncoder {
+    type Error = std::io::Error;
+
+    fn encode(&mut self, item: ControlFrame, dst: &mut BytesMut) -> Result<(), Self::Error> {
+        // Get type of the frame
+        let (_type, len) = match item {
+            ControlFrame::Ping(_) => (TYPE_PING, MINIMAL_PING_FRAME_SIZE),
+        };
+
+        // Reserve sufficient data in the buffer.
+        dst.reserve(HEADER_WIRE_SIZE + len as usize);
+
+        // Don't create a header, just write out the data in the correct order.
+        // - 1 byte version
+        // - 1 byte type
+        // - 2 byte frame length
+        dst.put_u8(PROTO_VERSION);
+        dst.put_u8(_type);
+        dst.put_u16(len);
+
+        match item {
+            ControlFrame::Ping(id) => {
+                // write the ID
+                dst.put_u32(id)
+            }
+        }
+
+        Ok(())
     }
 }
