@@ -40,6 +40,13 @@ pub struct ControlCodec {
     header: Option<FrameHeader>,
 }
 
+impl ControlCodec {
+    /// Create a new [`ControlCodec`].
+    pub fn new() -> Self {
+        Self { header: None }
+    }
+}
+
 impl Decoder for ControlCodec {
     type Item = ControlFrame;
     type Error = std::io::Error;
@@ -158,5 +165,33 @@ impl Encoder<ControlFrame> for ControlCodec {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::{sink::SinkExt, stream::StreamExt};
+    use tokio::io;
+    use tokio_util::codec;
+
+    #[tokio::test]
+    async fn can_send_ping_frame() {
+        let (client, server) = io::duplex(1024);
+
+        let mut client_sink = codec::Framed::new(client, ControlCodec::new());
+        let mut server_stream = codec::Framed::new(server, ControlCodec::new());
+
+        let ping_frame = ControlFrame::Ping(1);
+        println!("Sending ping frame");
+        client_sink.send(ping_frame).await.unwrap();
+        println!("frame sent, start receiving");
+        let received_frame = server_stream.next().await.unwrap().unwrap();
+        println!("frame received");
+        // We don't really want to implement PartialEq just for this.
+        match received_frame {
+            ControlFrame::Ping(1) => (),
+            _ => panic!("Received frame is not a Ping frame with ID 1"),
+        }
     }
 }
