@@ -72,8 +72,8 @@ impl Decoder for ControlCodec {
             let _type = src.get_u8();
             let len = src.get_u16();
 
-            // Remove decoded bytes from the buffer.
-            src.advance(HEADER_WIRE_SIZE);
+            // Don't advance the buffer manually as that is already done by reading the individual
+            // header pieces.
 
             FrameHeader {
                 version,
@@ -117,8 +117,10 @@ impl Decoder for ControlCodec {
                     // bytes large, and header.len is at least 4 bytes to decode the ID).
                     let id = src.get_u32();
                     // Remove bytes from the buffer. As explained we remove the amount of bytes as
-                    // indicated in the header, not just the bytes for the ID.
-                    src.advance(header.len as usize);
+                    // indicated in the header, not just the bytes for the ID. Keep in mind that we
+                    // already advanced 4 bytes by reading the ID. This subtraction is safe as we
+                    // checked header.len() is at least this large.
+                    src.advance(header.len as usize - 4);
                     Ok(Some(ControlFrame::Ping(id)))
                 }
             }
@@ -183,11 +185,8 @@ mod tests {
         let mut server_stream = codec::Framed::new(server, ControlCodec::new());
 
         let ping_frame = ControlFrame::Ping(1);
-        println!("Sending ping frame");
         client_sink.send(ping_frame).await.unwrap();
-        println!("frame sent, start receiving");
         let received_frame = server_stream.next().await.unwrap().unwrap();
-        println!("frame received");
         // We don't really want to implement PartialEq just for this.
         match received_frame {
             ControlFrame::Ping(1) => (),
