@@ -10,6 +10,7 @@ use tokio::{
 use tokio_tun::TunBuilder;
 
 mod control;
+mod peer;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
