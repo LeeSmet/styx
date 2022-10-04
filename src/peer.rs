@@ -1,10 +1,5 @@
+use crate::crypto::ed25519::{PublicKey, PUBLIC_KEY_LENGTH};
 use std::net::Ipv6Addr;
-
-/// Placeholder type for the actual ed25519::PublicKey type.
-type PublicKey = [u8; 32];
-
-/// Placeholder for size of ed25519::PublicKey;
-const PUBLIC_KEY_SIZE: usize = 32;
 
 /// Ported from https://github.com/yggdrasil-network/yggdrasil-go/blob/8c454a146cb70aa07ee2c87af964f5c1394da299/src/address/address.go#L19.
 const PREFIX: [u8; 1] = [0x02];
@@ -28,9 +23,9 @@ impl Peer {
     /// This is ported from https://github.com/yggdrasil-network/yggdrasil-go/blob/8c454a146cb70aa07ee2c87af964f5c1394da299/src/address/address.go#L51.
     /// It is not entirely clear why this function works like this, perhaps there are better ways.
     pub fn address(&self) -> Ipv6Addr {
-        let mut working_buffer = self.public_key;
-        for byte in working_buffer.iter_mut() {
-            *byte = !*byte;
+        let mut working_buffer = [0; PUBLIC_KEY_LENGTH];
+        for (b, o) in working_buffer.iter_mut().zip(self.public_key.as_bytes()) {
+            *b = !*o;
         }
 
         let mut done = false;
@@ -38,7 +33,7 @@ impl Peer {
         let mut bits = 0u8;
         let mut nbits = 0;
 
-        let mut temp = [0; PUBLIC_KEY_SIZE];
+        let mut temp = [0; PUBLIC_KEY_LENGTH];
         // Workaround to allow temp to be stack allocated - manually keep track of which byte
         // to set.
         let mut temp_idx = 0;
@@ -78,16 +73,18 @@ impl Peer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crypto::ed25519::PublicKey;
     use std::net::Ipv6Addr;
 
     #[test]
     /// Test ported from
     /// https://github.com/yggdrasil-network/yggdrasil-go/blob/8c454a146cb70aa07ee2c87af964f5c1394da299/src/address/address_test.go#L56.
     fn address_derive() {
-        let key: PublicKey = [
+        let key: PublicKey = PublicKey::from_bytes([
             189, 186, 207, 216, 34, 64, 222, 61, 205, 18, 57, 36, 203, 181, 82, 86, 251, 141, 171,
             8, 170, 152, 227, 5, 82, 138, 184, 79, 65, 158, 110, 25,
-        ];
+        ])
+        .unwrap();
 
         let expected_ip = Ipv6Addr::from([
             2, 0, 132, 138, 96, 79, 187, 126, 67, 132, 101, 219, 141, 182, 104, 149,

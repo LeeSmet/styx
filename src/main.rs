@@ -10,6 +10,7 @@ use tokio::{
 use tokio_tun::TunBuilder;
 
 mod control;
+mod crypto;
 mod peer;
 
 #[tokio::main]
