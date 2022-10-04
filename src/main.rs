@@ -1,6 +1,8 @@
+use clap::Parser;
 use etherparse::{ether_type, EtherType};
 use std::{
     error::Error,
+    net::SocketAddr,
     sync::{atomic::AtomicUsize, Arc},
 };
 use tokio::{
@@ -13,12 +15,29 @@ mod control;
 mod crypto;
 mod peer;
 
+#[derive(Parser)]
+#[command(name = "Styx")]
+#[command(version = "0.1.0")]
+#[command(
+    about = "Proof of concept IPv6 overlay implementation on a possibly mixed IPv4/6 tcp underlay"
+)]
+#[command(author = "Lee Smet <lee@threefold.tech>")]
+struct Cli {
+    /// The local IP and port to listen on for incoming connections.
+    #[arg(short = 'l', long = "listen-address")]
+    listen_addr: SocketAddr,
+    /// The remote IP and port to connect to for outgoing connections.
+    #[arg(short = 'p', long = "peer-address")]
+    peer: Option<SocketAddr>,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let args = Cli::parse();
     // See if a target is set on the cmd line
-    let target = std::env::args().skip(1).next();
+    // let target = std::env::args().skip(1).next();
     // Create a listener on all interfaces, fixed port for now.
-    let listener = TcpListener::bind("[::]:9651").await?;
+    let listener = TcpListener::bind(args.listen_addr).await?;
     // TODO: Investigate if MQ is a better approach to get multiple handles to the same device
     // instead of splitting it later.
     let iface = Arc::new(
@@ -65,7 +84,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
 
     // If we set a target, connect to it.
-    if let Some(target) = target {
+    if let Some(target) = args.peer {
         tokio::task::spawn(async move {
             let con = TcpStream::connect(target).await.unwrap();
             let (mut reader, mut writer) = con.into_split();
