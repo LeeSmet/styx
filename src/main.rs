@@ -12,8 +12,11 @@ use tokio::{
 use tokio_tun::TunBuilder;
 
 mod control;
+mod core;
 mod crypto;
 mod peer;
+
+const DEFAULT_INTERFACE_NAME: &str = "styx";
 
 #[derive(Parser)]
 #[command(name = "Styx")]
@@ -29,6 +32,9 @@ struct Cli {
     /// The remote IP and port to connect to for outgoing connections.
     #[arg(short = 'p', long = "peer-address")]
     peer: Option<SocketAddr>,
+    /// Name of the created interface
+    #[arg(short = 'i', long = "interface-name", default_value = DEFAULT_INTERFACE_NAME)]
+    interface_name: String,
 }
 
 #[tokio::main]
@@ -42,7 +48,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // instead of splitting it later.
     let iface = Arc::new(
         TunBuilder::new()
-            .name("styx")
+            .name(&args.interface_name)
             .tap(false)
             .mtu(1420)
             .packet_info(false)
