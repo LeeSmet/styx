@@ -1,9 +1,13 @@
+use crate::core::Core;
 use clap::Parser;
+use crypto::ed25519::SecretKey;
 use etherparse::{ether_type, EtherType};
+use log::info;
 use std::{
     error::Error,
     net::SocketAddr,
     sync::{atomic::AtomicUsize, Arc},
+    time::Duration,
 };
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
@@ -14,6 +18,7 @@ use tokio_tun::TunBuilder;
 mod control;
 mod core;
 mod crypto;
+mod net;
 mod peer;
 
 const DEFAULT_INTERFACE_NAME: &str = "styx";
@@ -39,6 +44,7 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    pretty_env_logger::init();
     let args = Cli::parse();
     // See if a target is set on the cmd line
     // let target = std::env::args().skip(1).next();
@@ -46,80 +52,88 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind(args.listen_addr).await?;
     // TODO: Investigate if MQ is a better approach to get multiple handles to the same device
     // instead of splitting it later.
-    let iface = Arc::new(
-        TunBuilder::new()
-            .name(&args.interface_name)
-            .tap(false)
-            .mtu(1420)
-            .packet_info(false)
-            .up()
-            .try_build()?,
-    );
 
-    tokio::spawn({
-        let iface = iface.clone();
-        async move {
-            loop {
-                // Accept new connections.
-                let (con, _) = listener.accept().await.unwrap();
-                let (mut reader, mut writer) = con.into_split();
-                let iface_read = iface.clone();
-                let iface_write = iface.clone();
-                tokio::spawn(async move {
-                    let mut buf = [0; 65535];
-                    loop {
-                        let n = iface_read.recv(&mut buf).await.unwrap();
-                        let mut s = 0;
-                        while s < n {
-                            s += writer.write(&buf[s..n]).await.unwrap();
-                        }
-                    }
-                });
-                tokio::spawn(async move {
-                    let mut buf = [0; 65535];
-                    loop {
-                        let n = reader.read(&mut buf).await.unwrap();
-                        let mut s = 0;
-                        while s < n {
-                            s += iface_write.send(&buf[s..n]).await.unwrap();
-                        }
-                    }
-                });
-            }
-        }
-    });
+    let secret_key = SecretKey::from_bytes([
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+        25, 26, 27, 28, 29, 30, 31,
+    ]);
+    let core = Core::new(secret_key, listener);
+    info!("Our address: {}", core.address());
+    tokio::time::sleep(Duration::from_secs(60)).await;
+    // let iface = Arc::new(
+    //     TunBuilder::new()
+    //         .name(&args.interface_name)
+    //         .tap(false)
+    //         .mtu(1420)
+    //         .packet_info(false)
+    //         .up()
+    //         .try_build()?,
+    // );
 
-    // If we set a target, connect to it.
-    if let Some(target) = args.peer {
-        tokio::task::spawn(async move {
-            let con = TcpStream::connect(target).await.unwrap();
-            let (mut reader, mut writer) = con.into_split();
-            let iface_read = iface.clone();
-            let iface_write = iface.clone();
-            tokio::spawn(async move {
-                let mut buf = [0; 65535];
-                loop {
-                    let n = iface_read.recv(&mut buf).await.unwrap();
-                    let mut s = 0;
-                    while s < n {
-                        s += writer.write(&buf[s..n]).await.unwrap();
-                    }
-                }
-            });
-            tokio::spawn(async move {
-                let mut buf = [0; 65535];
-                loop {
-                    let n = reader.read(&mut buf).await.unwrap();
-                    let mut s = 0;
-                    while s < n {
-                        s += iface_write.send(&buf[s..n]).await.unwrap();
-                    }
-                }
-            });
-        });
-    };
+    // tokio::spawn({
+    //     let iface = iface.clone();
+    //     async move {
+    //         loop {
+    //             // Accept new connections.
+    //             let (con, _) = listener.accept().await.unwrap();
+    //             let (mut reader, mut writer) = con.into_split();
+    //             let iface_read = iface.clone();
+    //             let iface_write = iface.clone();
+    //             tokio::spawn(async move {
+    //                 let mut buf = [0; 65535];
+    //                 loop {
+    //                     let n = iface_read.recv(&mut buf).await.unwrap();
+    //                     let mut s = 0;
+    //                     while s < n {
+    //                         s += writer.write(&buf[s..n]).await.unwrap();
+    //                     }
+    //                 }
+    //             });
+    //             tokio::spawn(async move {
+    //                 let mut buf = [0; 65535];
+    //                 loop {
+    //                     let n = reader.read(&mut buf).await.unwrap();
+    //                     let mut s = 0;
+    //                     while s < n {
+    //                         s += iface_write.send(&buf[s..n]).await.unwrap();
+    //                     }
+    //                 }
+    //             });
+    //         }
+    //     }
+    // });
 
-    tokio::time::sleep(std::time::Duration::from_secs(60 * 60 * 24)).await;
+    // // If we set a target, connect to it.
+    // if let Some(target) = args.peer {
+    //     tokio::task::spawn(async move {
+    //         let con = TcpStream::connect(target).await.unwrap();
+    //         let (mut reader, mut writer) = con.into_split();
+    //         let iface_read = iface.clone();
+    //         let iface_write = iface.clone();
+    //         tokio::spawn(async move {
+    //             let mut buf = [0; 65535];
+    //             loop {
+    //                 let n = iface_read.recv(&mut buf).await.unwrap();
+    //                 let mut s = 0;
+    //                 while s < n {
+    //                     s += writer.write(&buf[s..n]).await.unwrap();
+    //                 }
+    //             }
+    //         });
+    //         tokio::spawn(async move {
+    //             let mut buf = [0; 65535];
+    //             loop {
+    //                 let n = reader.read(&mut buf).await.unwrap();
+    //                 let mut s = 0;
+    //                 while s < n {
+    //                     s += iface_write.send(&buf[s..n]).await.unwrap();
+    //                 }
+    //             }
+    //         });
+    //     });
+    // };
+
+    // tokio::time::sleep(std::time::Duration::from_secs(60 * 60 * 24)).await;
 
     Ok(())
 }

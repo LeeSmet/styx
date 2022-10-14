@@ -89,12 +89,13 @@ impl PublicKey {
 
 impl SecretKey {
     /// Creates a new instance of [`SecretKey`] from the given bytes.
-    pub fn from_bytes(raw: [u8; SECRET_KEY_LENGTH]) -> Result<Self, super::Error> {
+    pub fn from_bytes(raw: [u8; SECRET_KEY_LENGTH]) -> Self {
         // We can ignore the invalid lenght error here since we take a fixed length slice of the
         // correct length as argument.
-        Ok(Self(
-            DalekSecretKey::from_bytes(&raw[..]).map_err(|_| super::Error::InvalidData)?,
-        ))
+        // SAFETY: this only returns an error if the slice is not  of lenght SECRET_KEY_LENGTH,
+        // which can't happen as we have an array of that exact length and slice over its full
+        // length.
+        Self(DalekSecretKey::from_bytes(&raw[..]).unwrap())
     }
 
     /// View this secret key as a byte array
