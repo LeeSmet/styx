@@ -1,13 +1,16 @@
 use std::collections::HashMap;
 use std::{collections::HashSet, net::Ipv6Addr, sync::Arc};
 
+use futures::StreamExt;
 use log::{debug, error};
 use tokio::{
     io::AsyncReadExt,
     net::{TcpListener, TcpStream},
     sync::mpsc,
 };
+use tokio_util::codec::Framed;
 
+use crate::control::ControlCodec;
 use crate::crypto::ed25519::PUBLIC_KEY_LENGTH;
 use crate::net::Subnet;
 use crate::{
@@ -80,7 +83,7 @@ impl Core {
         while let Some(connection) = con_receiver.recv().await {
             match connection {
                 Connection::Control(con, peer) => {
-                    tokio::spawn(Core::spawn_control_con());
+                    tokio::spawn(Core::spawn_control_con(con));
                 }
                 Connection::Data(con, peer) => {
                     tokio::spawn(Core::spawn_data_con());
@@ -89,7 +92,9 @@ impl Core {
         }
     }
 
-    async fn spawn_control_con() {
+    async fn spawn_control_con(con: TcpStream) {
+        let framed = Framed::new(con, ControlCodec::new());
+        let (mut tx, mut rx) = framed.split();
         todo!();
     }
 
